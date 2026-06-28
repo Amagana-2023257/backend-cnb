@@ -6,6 +6,9 @@
       "maxDuration": 30
     }
   },
+  "redirects": [
+    { "source": "/", "destination": "https://cnb-test-61a1a.web.app", "permanent": false }
+  ],
   "rewrites": [
     { "source": "/(.*)", "destination": "/api" }
   ]
