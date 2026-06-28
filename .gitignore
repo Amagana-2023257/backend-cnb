@@ -1,0 +1,17 @@
+# secrets / entorno
+.env
+.env.*
+!.env.example
+serviceAccount*.json
+
+# deps
+node_modules/
+
+# ingesta
+ingest-checkpoint.json
+
+# logs
+*.log
+
+# vercel
+.vercel/
