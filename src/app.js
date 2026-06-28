@@ -20,6 +20,15 @@ export function createApp() {
   // Alias directo para health-check de plataformas.
   app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
+  // Raíz: info del servicio (evita un 500 al abrir la URL base).
+  app.get('/', (_req, res) =>
+    res.json({
+      service: 'wiki-cnb-api',
+      status: 'ok',
+      endpoints: ['/api/health', '/api/pages', '/api/search', '/api/categories', '/api/namespaces', '/api/sync/manifest'],
+    }),
+  );
+
   app.use(notFound);
   app.use(errorHandler);
   return app;
