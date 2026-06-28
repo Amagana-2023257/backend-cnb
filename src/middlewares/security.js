@@ -11,10 +11,10 @@ export function security(app) {
     cors({
       origin(origin, cb) {
         // Permite herramientas sin origin (curl) y los dominios del allowlist.
-        if (!origin || config.corsOrigins.includes(origin.toLowerCase())) {
-          return cb(null, true);
-        }
-        return cb(new Error(`Origen no permitido por CORS: ${origin}`));
+        // Para un origen no permitido NO lanzamos error (evita 500): simplemente
+        // no se añaden los headers CORS y el navegador lo bloquea limpiamente.
+        const allowed = !origin || config.corsOrigins.includes(origin.toLowerCase());
+        cb(null, allowed);
       },
       methods: ['GET', 'POST', 'PUT', 'DELETE'],
       allowedHeaders: ['Content-Type', 'Authorization'],

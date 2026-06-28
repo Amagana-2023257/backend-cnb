@@ -22,7 +22,10 @@ function list(name, fallback = '') {
 export const config = {
   env: process.env.NODE_ENV ?? 'development',
   port: Number(process.env.PORT ?? 3000),
-  corsOrigins: list('CORS_ORIGIN', 'http://localhost:5173'),
+  corsOrigins: list(
+    'CORS_ORIGIN',
+    'http://localhost:5173,https://cnb-test-61a1a.web.app,https://cnb-test-61a1a.firebaseapp.com',
+  ),
   firebase: {
     projectId: process.env.FIREBASE_PROJECT_ID,
     serviceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT, // prod (Vercel)
