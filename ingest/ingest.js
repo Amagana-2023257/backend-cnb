@@ -28,9 +28,18 @@ const NS_NAMES = {
 
 function loadCheckpoint() {
   if (existsSync(CHECKPOINT)) {
-    try { return JSON.parse(readFileSync(CHECKPOINT, 'utf8')); } catch { /* */ }
+    try {
+      const cp = JSON.parse(readFileSync(CHECKPOINT, 'utf8'));
+      // Compatibilidad con checkpoints viejos (sin acumuladores).
+      cp.processed ??= 0;
+      cp.lastLine ??= 0;
+      cp.ns ??= {};
+      cp.cat ??= {};
+      cp.done ??= false;
+      return cp;
+    } catch { /* */ }
   }
-  return { processed: 0, lastLine: 0 };
+  return { processed: 0, lastLine: 0, ns: {}, cat: {}, done: false };
 }
 function saveCheckpoint(cp) {
   writeFileSync(CHECKPOINT, JSON.stringify(cp));
@@ -65,13 +74,19 @@ function buildDoc(rec, classify) {
  * - categories: doc id = nombre codificado (evita '/' inválido en Firestore).
  */
 async function writeAggregates(nsCounts, catCounts) {
+  // nsCounts/catCounts son objetos planos (persistidos en el checkpoint),
+  // acumulados a lo largo de TODAS las corridas → conteos totales correctos.
+  const nsEntries = Object.entries(nsCounts);
+  const catEntries = Object.entries(catCounts);
+
   // Namespaces.
   let batch = db.batch();
   let n = 0;
-  for (const [ns, count] of nsCounts) {
-    batch.set(collections.namespaces.doc(String(ns)), {
-      id: ns,
-      name: NS_NAMES[ns] ?? `ns${ns}`,
+  for (const [ns, count] of nsEntries) {
+    const nsNum = Number(ns);
+    batch.set(collections.namespaces.doc(String(nsNum)), {
+      id: nsNum,
+      name: NS_NAMES[nsNum] ?? `ns${nsNum}`,
       count,
     });
     if (++n >= config.ingest.batchSize) { await batch.commit(); batch = db.batch(); n = 0; }
@@ -81,14 +96,14 @@ async function writeAggregates(nsCounts, catCounts) {
   // Categorías.
   batch = db.batch();
   n = 0;
-  for (const [name, count] of catCounts) {
+  for (const [name, count] of catEntries) {
     const id = encodeURIComponent(name).slice(0, 1500); // doc id seguro
     batch.set(collections.categories.doc(id), { name, count });
     if (++n >= config.ingest.batchSize) { await batch.commit(); batch = db.batch(); n = 0; }
   }
   if (n > 0) await batch.commit();
 
-  console.log(`  Navegación: ${nsCounts.size} namespaces, ${catCounts.size} categorías`);
+  console.log(`  Navegación: ${nsEntries.length} namespaces, ${catEntries.length} categorías`);
 }
 
 async function run() {
@@ -105,16 +120,18 @@ async function run() {
 
   const rl = createInterface({ input: createReadStream(jsonlPath, 'utf8'), crlfDelay: Infinity });
 
-  // Acumuladores para poblar las colecciones categories/namespaces al final.
-  // Nota: el conteo es exacto en una corrida completa; en una reanudación
-  // (checkpoint) solo cuenta lo procesado en esta ejecución.
-  const nsCounts = new Map();
-  const catCounts = new Map();
+  // Acumuladores PERSISTIDOS en el checkpoint (cp.ns / cp.cat). Se suman a lo
+  // largo de TODAS las corridas, así una ingesta partida en chunks diarios
+  // (p. ej. por la cuota gratuita de Firestore) termina con conteos correctos.
+  const nsCounts = cp.ns;
+  const catCounts = cp.cat;
 
   // Límite opcional de páginas a procesar en esta corrida (INGEST_LIMIT).
-  // 0 = sin límite (ingesta completa). Útil para una prueba pequeña.
+  // 0 = sin límite. Útil para cortar bajo la cuota diaria (p. ej. 19000) o
+  // para una prueba pequeña.
   const limit = Number(process.env.INGEST_LIMIT ?? 0);
   let processedThisRun = 0;
+  let stoppedByLimit = false;
 
   let lineNo = 0;
   let batch = db.batch();
@@ -139,33 +156,38 @@ async function run() {
     cp.processed += 1;
     processedThisRun += 1;
 
-    nsCounts.set(rec.ns, (nsCounts.get(rec.ns) ?? 0) + 1);
-    for (const c of doc.categories) catCounts.set(c, (catCounts.get(c) ?? 0) + 1);
-
-    if (limit && processedThisRun >= limit) { cp.lastLine = lineNo; break; }
+    nsCounts[rec.ns] = (nsCounts[rec.ns] ?? 0) + 1;
+    for (const c of doc.categories) catCounts[c] = (catCounts[c] ?? 0) + 1;
 
     if (inBatch >= config.ingest.batchSize) {
       await flush();
       cp.lastLine = lineNo;
-      saveCheckpoint(cp);
+      saveCheckpoint(cp);                 // persiste páginas + acumuladores
       if (cp.processed % 5000 === 0) console.log(`  … ${cp.processed} páginas`);
     }
+
+    if (limit && processedThisRun >= limit) { stoppedByLimit = true; break; }
   }
   await flush();
   cp.lastLine = lineNo;
-  saveCheckpoint(cp);
 
-  // Poblar colecciones de navegación (categories / namespaces).
-  await writeAggregates(nsCounts, catCounts);
-
-  // Metadatos para el manifiesto de sync.
-  await collections.meta.doc('content').set({
-    version: Date.now(),
-    pages: cp.processed,
-    ingestedAt: new Date().toISOString(),
-  });
-
-  console.log(`✔ Ingesta completa: ${cp.processed} páginas en Firestore.`);
+  // Solo cuando se consumió TODO el archivo (no por INGEST_LIMIT) poblamos la
+  // navegación y los metadatos, con los acumuladores totales del checkpoint.
+  if (!stoppedByLimit) {
+    cp.done = true;
+    saveCheckpoint(cp);
+    await writeAggregates(nsCounts, catCounts);
+    await collections.meta.doc('content').set({
+      version: Date.now(),
+      pages: cp.processed,
+      ingestedAt: new Date().toISOString(),
+    });
+    console.log(`✔ Ingesta completa: ${cp.processed} páginas en Firestore.`);
+  } else {
+    saveCheckpoint(cp);
+    console.log(`⏸ Corte por INGEST_LIMIT: ${cp.processed} páginas acumuladas. ` +
+      `Vuelve a correr para continuar (la navegación se escribe al terminar el archivo).`);
+  }
   process.exit(0);
 }
 
