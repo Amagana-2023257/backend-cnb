@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { collections } from '../../config/firebaseAdmin.js';
 import { pageRepository } from '../page/page.repository.js';
 import { toPageDTO } from '../page/page.model.js';
+import { subscriberController } from '../subscriber/subscriber.controller.js';
 import { validate } from '../../middlewares/validate.js';
 import { requireAdmin } from '../../middlewares/auth.js';
 import { adminLimiter } from '../../middlewares/rateLimit.js';
@@ -21,6 +22,9 @@ adminRoutes.get(
   '/me',
   asyncHandler(async (req, res) => ok(res, { ...req.user, isAdmin: true })),
 );
+
+// Listado de suscriptores (solo admin).
+adminRoutes.get('/subscribers', subscriberController.list);
 
 // Listar artículos marcados como spam para revisión humana.
 adminRoutes.get(

@@ -4,7 +4,9 @@ import { searchRoutes } from '../modules/search/search.routes.js';
 import { categoryRoutes } from '../modules/category/category.routes.js';
 import { namespaceRoutes } from '../modules/namespace/namespace.routes.js';
 import { syncRoutes } from '../modules/sync/sync.routes.js';
+import { subscriberRoutes } from '../modules/subscriber/subscriber.routes.js';
 import { adminRoutes } from '../modules/admin/admin.routes.js';
+import { centrosRoutes } from '../modules/centros/centros.routes.js';
 
 /** Monta todas las rutas de módulos bajo /api. */
 export const apiRouter = Router();
@@ -15,4 +17,6 @@ apiRouter.use('/search', searchRoutes);
 apiRouter.use('/categories', categoryRoutes);
 apiRouter.use('/namespaces', namespaceRoutes);
 apiRouter.use('/sync', syncRoutes);
+apiRouter.use('/subscribe', subscriberRoutes);
 apiRouter.use('/admin', adminRoutes);
+apiRouter.use('/centros', centrosRoutes);

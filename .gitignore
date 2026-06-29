@@ -3,9 +3,14 @@
 .env.*
 !.env.example
 serviceAccount*.json
+*firebase-adminsdk*.json
 
 # deps
 node_modules/
+
+# datos derivados (generados con npm run build:data — pesados, no versionar)
+data/
+*.slim.ndjson
 
 # ingesta
 ingest-checkpoint.json

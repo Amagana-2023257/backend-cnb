@@ -8,6 +8,9 @@
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
     "ingest": "node ingest/ingest.js",
+    "build:slim": "node scripts/build-paginas-slim.js",
+    "build:centros-data": "node scripts/build-centros-data.js",
+    "build:data": "npm run build:slim && npm run build:centros-data",
     "deploy": "vercel --prod"
   },
   "dependencies": {

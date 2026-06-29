@@ -34,4 +34,5 @@ export const collections = {
   categories: db.collection('categories'),
   namespaces: db.collection('namespaces'),
   meta: db.collection('meta'),
+  subscribers: db.collection('subscribers'),
 };

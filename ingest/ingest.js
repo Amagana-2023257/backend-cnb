@@ -111,6 +111,11 @@ async function run() {
   const nsCounts = new Map();
   const catCounts = new Map();
 
+  // Límite opcional de páginas a procesar en esta corrida (INGEST_LIMIT).
+  // 0 = sin límite (ingesta completa). Útil para una prueba pequeña.
+  const limit = Number(process.env.INGEST_LIMIT ?? 0);
+  let processedThisRun = 0;
+
   let lineNo = 0;
   let batch = db.batch();
   let inBatch = 0;
@@ -132,9 +137,12 @@ async function run() {
     batch.set(collections.pages.doc(String(rec.pageid)), doc, { merge: true });
     inBatch += 1;
     cp.processed += 1;
+    processedThisRun += 1;
 
     nsCounts.set(rec.ns, (nsCounts.get(rec.ns) ?? 0) + 1);
     for (const c of doc.categories) catCounts.set(c, (catCounts.get(c) ?? 0) + 1);
+
+    if (limit && processedThisRun >= limit) { cp.lastLine = lineNo; break; }
 
     if (inBatch >= config.ingest.batchSize) {
       await flush();
