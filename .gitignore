@@ -12,6 +12,10 @@ node_modules/
 data/
 *.slim.ndjson
 
+# volcado JSONL de páginas (~155 MB, fuente de la ingesta — no versionar)
+contenido_paginas.jsonl
+*.jsonl
+
 # ingesta
 ingest-checkpoint.json
 
